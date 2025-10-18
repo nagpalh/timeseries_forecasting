@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Time Series Forecaster</title>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
+    <style>
+        :root {
+            color-scheme: light;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f6fa;
+            color: #222;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 32px 24px 48px;
+        }
+
+        h1 {
+            margin-bottom: 0.5rem;
+        }
+
+        p.description {
+            margin-top: 0;
+            color: #555;
+        }
+
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin-top: 8px;
+        }
+
+        button {
+            padding: 10px 18px;
+            border-radius: 4px;
+            border: none;
+            background-color: #4d7cfe;
+            color: #fff;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #2f5ed5;
+        }
+
+        .alerts {
+            margin-bottom: 18px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .alert.error {
+            background-color: #ffe5e5;
+            color: #771111;
+        }
+
+        .panel {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+        }
+
+        .panel h2 {
+            margin-top: 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .stat-item {
+            background-color: #f3f6ff;
+            border-radius: 6px;
+            padding: 12px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #44506f;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+
+        #forecast-chart {
+            width: 100%;
+            min-height: 420px;
+        }
+
+        table.dataTable thead th {
+            background-color: #edf1ff;
+        }
+
+        .format-example {
+            background-color: #fefefe;
+            border: 1px solid #dde1ef;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: "Courier New", monospace;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 24px 16px;
+            }
+
+            form {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Time Series Forecaster</h1>
+        <p class="description">Upload a CSV or Excel file. The first column should contain timestamps (dd.mm.yy HH:MM is supported) and the second column should hold numeric values.</p>
+
+        <div class="alerts">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+            <label for="data_file">Select CSV or Excel file</label>
+            <input id="data_file" name="data_file" type="file" accept=".csv,.xlsx,.xls" required>
+            <small>Forecast horizon: {{ forecast_steps }} periods.</small>
+            <div style="margin-top: 16px;">
+                <button type="submit">Generate Forecast</button>
+            </div>
+        </form>
+
+        {% if original_data %}
+            <div class="panel">
+                <h2>Original Data</h2>
+                <table id="original-table" class="display nowrap" style="width:100%">
+                    <thead>
+                        <tr>
+                            {% for column in original_columns %}
+                                <th>{{ column }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if summary_stats %}
+            <div class="panel">
+                <h2>Data Characteristics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Observations</div>
+                        <div class="stat-value">{{ summary_stats.observations }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Mean</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.mean) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Median</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.median) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Std. Dev.</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.std_dev) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Minimum</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.minimum) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Maximum</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.maximum) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Range</div>
+                        <div class="stat-value">{{ '%.3f'|format(summary_stats.value_range) }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Start</div>
+                        <div class="stat-value">{{ summary_stats.start }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">End</div>
+                        <div class="stat-value">{{ summary_stats.end }}</div>
+                    </div>
+                </div>
+
+                {% if missing_info %}
+                    <div style="margin-top: 20px;">
+                        <h3 style="margin-top:0;">Missing Values</h3>
+                        <p>Missing timestamps: <strong>{{ missing_info.missing_timestamps }}</strong></p>
+                        <p>Missing values before cleaning: <strong>{{ missing_info.missing_values_before }}</strong></p>
+                        <p>Missing values after cleaning: <strong>{{ missing_info.missing_values_after }}</strong></p>
+                        {% if missing_info.fill_steps %}
+                            <p>Fill steps applied: <strong>{{ missing_info.fill_steps | join(', ') }}</strong></p>
+                        {% else %}
+                            <p>No missing values detected.</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if plot_json %}
+            <div class="panel">
+                <h2>Interactive Forecast</h2>
+                <div id="forecast-chart"></div>
+            </div>
+        {% endif %}
+
+        {% if forecast_rows %}
+            <div class="panel">
+                <h2>Forecast Values</h2>
+                <table id="forecast-table" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Forecast</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        <div class="panel">
+            <h2>Expected File Format</h2>
+            <p>The first column should contain timestamps (e.g. <code>01.05.24 10:30</code>) and the second column must be numeric values. Additional columns will be shown in the data table but ignored for forecasting.</p>
+            <div class="format-example">
+Date,Value
+01.05.24 00:00,123
+02.05.24 00:00,130
+03.05.24 00:00,125
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const originalData = {{ original_data|tojson }};
+            const originalColumns = {{ original_columns|tojson }};
+            const forecastData = {{ forecast_rows|tojson }};
+            const plotJson = {{ plot_json|tojson }};
+
+            if (originalData && originalData.length) {
+                $('#original-table').DataTable({
+                    data: originalData,
+                    columns: originalColumns.map(column => ({ title: column, data: column })),
+                    dom: 'Bfrtip',
+                    buttons: ['copyHtml5', 'csvHtml5', 'excelHtml5'],
+                    pageLength: 25,
+                    scrollX: true,
+                });
+            }
+
+            if (forecastData && forecastData.length) {
+                $('#forecast-table').DataTable({
+                    data: forecastData,
+                    columns: [
+                        { title: 'Timestamp', data: 'timestamp' },
+                        {
+                            title: 'Forecast',
+                            data: 'forecast',
+                            render: function (data) {
+                                if (data === null || data === undefined || data === '') {
+                                    return '';
+                                }
+                                const numeric = Number(data);
+                                return Number.isFinite(numeric) ? numeric.toFixed(3) : data;
+                            }
+                        },
+                    ],
+                    dom: 'Bfrtip',
+                    buttons: ['copyHtml5', 'csvHtml5', 'excelHtml5'],
+                    pageLength: 25,
+                });
+            }
+
+            if (plotJson) {
+                const figure = JSON.parse(plotJson);
+                Plotly.newPlot('forecast-chart', figure.data, figure.layout, {
+                    responsive: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['select2d', 'lasso2d']
+                });
+            }
+        });
+    </script>
+</body>
+</html>

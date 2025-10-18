@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Data · Forecast Studio{% endblock %}
+
+{% block content %}
+    <section class="py-4 py-lg-5">
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <span class="badge bg-primary-subtle text-primary mb-3">Step 1</span>
+                        <h1 class="h3 fw-bold">Upload your time-series file</h1>
+                        <p class="text-muted">We support CSV, XLS, and XLSX formats. The first column should contain timestamps (dd.mm.yy HH:MM fully supported) and the second column numeric values. Extra columns remain available for reference.</p>
+
+                        <hr class="my-4">
+
+                        <ul class="list-unstyled text-muted small">
+                            <li class="mb-2"><i class="fa-solid fa-shield-halved text-success me-2"></i> Data stored securely in SQLite—revisit anytime.</li>
+                            <li class="mb-2"><i class="fa-solid fa-broom text-success me-2"></i> Intelligent cleaning handles gaps with time-aware interpolation.</li>
+                            <li><i class="fa-solid fa-circle-info text-success me-2"></i> Receive instant feedback and guidance after upload.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="upload-panel h-100 d-flex align-items-center">
+                    <form class="w-100" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <div class="border border-2 border-dashed rounded-4 p-5 text-center bg-white shadow-sm">
+                            <i class="fa-solid fa-cloud-arrow-up display-5 text-primary mb-3"></i>
+                            <h2 class="h4 fw-semibold">Drag & drop your file here</h2>
+                            <p class="text-muted">…or click the button below to browse.</p>
+                            <div class="d-grid gap-3 justify-content-center mt-4">
+                                <input class="form-control form-control-lg" id="data_file" name="data_file" type="file" accept=".csv,.xlsx,.xls" required>
+                                <button class="btn btn-primary btn-lg" type="submit"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>Process dataset</button>
+                            </div>
+                            <p class="small text-muted mt-3">Max file size is governed by your server configuration.</p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="h5 fw-semibold mb-3">What happens next?</h2>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="step-counter bg-primary text-white">2</div>
+                            <div>
+                                <div class="fw-semibold">Explore & diagnose</div>
+                                <div class="text-muted small">Review interactive tables, click any value to copy, and assess data health.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="step-counter bg-success text-white">3</div>
+                            <div>
+                                <div class="fw-semibold">Forecast</div>
+                                <div class="text-muted small">Generate Holt-Winters forecasts and download the horizon instantly.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="step-counter bg-info text-white"><i class="fa-solid fa-infinity"></i></div>
+                            <div>
+                                <div class="fw-semibold">Revisit anytime</div>
+                                <div class="text-muted small">All uploads remain accessible via the home dashboard.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}

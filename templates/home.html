@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Forecast Studio · Intelligent Time-Series Insights{% endblock %}
+
+{% block content %}
+    <section class="py-4 py-lg-5">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <span class="badge bg-primary-subtle text-primary mb-3">Time-series made approachable</span>
+                <h1 class="display-5 fw-bold text-dark">Turn raw observations into polished forecasts in minutes.</h1>
+                <p class="lead text-muted mt-3">Forecast Studio guides you through a curated workflow - upload, explore, diagnose, and project the future, without leaving your browser.</p>
+                <div class="d-flex flex-wrap gap-3 mt-4">
+                    <a class="btn btn-primary btn-lg" href="{{ url_for('upload') }}"><i class="fa-solid fa-cloud-arrow-up me-2"></i>Upload your data</a>
+                    <a class="btn btn-outline-primary btn-lg" href="#how-it-works"><i class="fa-solid fa-circle-play me-2"></i>See how it works</a>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-lg border-0 gradient-card">
+                    <div class="card-body p-4 p-lg-5">
+                        <h2 class="h4 text-white">Why Forecast Studio?</h2>
+                        <ul class="list-unstyled text-white-50 mt-4 mb-0">
+                            <li class="mb-3"><i class="fa-solid fa-face-smile-beam me-2"></i>Polished UX with guided steps and live feedback</li>
+                            <li class="mb-3"><i class="fa-solid fa-chart-gantt me-2"></i>Advanced Holt-Winters forecasts crafted with statsmodels</li>
+                            <li class="mb-3"><i class="fa-solid fa-table-cells-large me-2"></i>Interactive tables and visuals powered by DataTables & Plotly</li>
+                            <li><i class="fa-solid fa-database me-2"></i>Securely backed by SQLite - resume where you left off</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" id="how-it-works">
+        <div class="row g-4">
+            <div class="col-12 text-center">
+                <span class="badge bg-secondary-subtle text-secondary mb-2">Guided workflow</span>
+                <h2 class="fw-bold">A streamlined path from data to decisions</h2>
+                <p class="text-muted">Each stage is self-contained with contextual tips, rich previews, and one-click exports.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body p-4">
+                        <div class="icon-bubble bg-primary-subtle text-primary mb-3"><i class="fa-solid fa-upload"></i></div>
+                        <h3 class="h5">1. Upload</h3>
+                        <p class="text-muted">Drag-and-drop CSV or Excel files. We handle dd.mm.yy HH:MM timestamps, inspect structure, and secure the raw data in SQLite.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body p-4">
+                        <div class="icon-bubble bg-success-subtle text-success mb-3"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+                        <h3 class="h5">2. Explore</h3>
+                        <p class="text-muted">Interact with rich tables, tap any value to copy, and review beautifully curated summary cards and data health diagnostics.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body p-4">
+                        <div class="icon-bubble bg-info-subtle text-info mb-3"><i class="fa-solid fa-chart-line"></i></div>
+                        <h3 class="h5">3. Forecast</h3>
+                        <p class="text-muted">Generate interactive projections, export the horizon, and inspect future trajectories with zoom, pan, and hover tools.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <h3 class="h5 mb-3"><i class="fa-solid fa-sparkles text-warning me-2"></i>Experience built for all</h3>
+                        <ul class="list-unstyled text-muted mb-0">
+                            <li class="mb-3"><i class="fa-solid fa-check text-success me-2"></i>Responsive design with dark-on-light palettes for long sessions</li>
+                            <li class="mb-3"><i class="fa-solid fa-check text-success me-2"></i>One-click exports to CSV, Excel, or clipboard for any table</li>
+                            <li class="mb-3"><i class="fa-solid fa-check text-success me-2"></i>Automated gap-filling via time-aware interpolation and smart backfills</li>
+                            <li><i class="fa-solid fa-check text-success me-2"></i>Secure persistence - every upload is catalogued with timestamps</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="h5 mb-0"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Recent datasets</h3>
+                            {% if recent_datasets %}
+                                <form method="post" action="{{ url_for('delete_all_datasets') }}" onsubmit="return confirm('Delete all saved datasets? This cannot be undone.');">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">
+                                        <i class="fa-solid fa-trash-can me-1"></i>Delete all
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        {% if recent_datasets %}
+                            <ul class="list-group list-group-flush">
+                                {% for dataset in recent_datasets %}
+                                    <li class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start gap-3">
+                                            <div>
+                                                <div class="fw-semibold">{{ dataset.filename }}</div>
+                                                <small class="text-muted">Uploaded at {{ dataset.uploaded_at }}</small>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('visualize', dataset_id=dataset.id) }}">
+                                                    Open <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
+                                                </a>
+                                                <form method="post" action="{{ url_for('delete_dataset', dataset_id=dataset.id) }}" onsubmit="return confirm('Delete this dataset? This cannot be undone.');">
+                                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                                    <button class="btn btn-outline-danger btn-sm" type="submit">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No uploads yet. Be the first to bring your time series to life.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}

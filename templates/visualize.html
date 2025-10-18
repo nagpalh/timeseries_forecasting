@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Explore · {{ dataset.filename }} · Forecast Studio{% endblock %}
+
+{% block content %}
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('upload') }}">Upload</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Explore</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">Explore & diagnose your dataset</h1>
+            <p class="text-muted mb-0">{{ dataset.filename }} &middot; Uploaded at {{ dataset.uploaded_at }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" href="{{ url_for('upload') }}"><i class="fa-solid fa-repeat me-2"></i>Upload another</a>
+            <a class="btn btn-primary" href="{{ url_for('forecast', dataset_id=dataset.id) }}"><i class="fa-solid fa-forward me-2"></i>Proceed to forecasting</a>
+        </div>
+    </div>
+
+    <section class="mb-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between">
+                    <div>
+                        <h2 class="h4 fw-semibold mb-1">Data quality at a glance</h2>
+                        <p class="text-muted mb-0">We cleaned missing points, standardised timestamps, and preserved your original structure for reference.</p>
+                    </div>
+                    <div class="text-muted small"><i class="fa-solid fa-circle-info me-2"></i>Tip: click any value in the tables to copy it instantly.</div>
+                </div>
+
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-3">
+                    {% for card in summary_cards %}
+                        <div class="col">
+                            <div class="metric-card h-100">
+                                <div class="metric-icon"><i class="fa-solid {{ card.icon }}"></i></div>
+                                <div class="metric-label">{{ card.label }}</div>
+                                <div class="metric-value">{{ card.value }}</div>
+                                <div class="metric-description text-muted">{{ card.description }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="row g-4 mt-3">
+                    <div class="col-md-6">
+                        <div class="card bg-light border-0 h-100">
+                            <div class="card-body">
+                                <h3 class="h6 text-uppercase text-muted">Missing value treatment</h3>
+                                {% if missing_info.timestamp_note %}
+                                    <p class="mt-2"><span class="badge bg-primary-subtle text-primary">Timestamp parser</span> {{ missing_info.timestamp_note }}</p>
+                                {% endif %}
+                                <ul class="timeline mt-3">
+                                    <li>
+                                        <div class="timeline-badge bg-primary-subtle text-primary"><i class="fa-solid fa-calendar-xmark"></i></div>
+                                        <div class="timeline-content">
+                                            <h4 class="h6">Missing timestamps</h4>
+                                            <p class="mb-0">{{ missing_info.missing_timestamps }} rows dropped before cleaning.</p>
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <div class="timeline-badge bg-warning-subtle text-warning"><i class="fa-solid fa-droplet"></i></div>
+                                        <div class="timeline-content">
+                                            <h4 class="h6">Missing values</h4>
+                                            <p class="mb-0">{{ missing_info.missing_values_before }} gaps detected in the value column.</p>
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <div class="timeline-badge bg-success-subtle text-success"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                                        <div class="timeline-content">
+                                            <h4 class="h6">Fill strategy</h4>
+                                            {% if missing_info.fill_steps %}
+                                                <p class="mb-0">Applied {{ missing_info.fill_steps | join(' → ') }}.</p>
+                                            {% else %}
+                                                <p class="mb-0">No gaps detected; original values retained.</p>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                    <li>
+                                        <div class="timeline-badge bg-info-subtle text-info"><i class="fa-solid fa-circle-check"></i></div>
+                                        <div class="timeline-content">
+                                            <h4 class="h6">Current status</h4>
+                                            <p class="mb-0">{{ missing_info.missing_values_after }} missing values remain after cleaning.</p>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <h3 class="h6 text-uppercase text-muted mb-3">Series timeline</h3>
+                                <div id="history-chart" class="chart-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+                    <div>
+                        <h2 class="h4 fw-semibold mb-1">Original records</h2>
+                        <p class="text-muted mb-0">Your raw data as provided—search, sort, export, or copy individual cells.</p>
+                    </div>
+                    <div class="badge bg-secondary-subtle text-secondary">
+                        <i class="fa-solid fa-table me-2"></i>{{ original_data|length }} rows
+                    </div>
+                </div>
+                <table id="original-table" class="table table-striped" style="width: 100%">
+                    <thead>
+                        <tr>
+                            {% for column in original_columns %}
+                                <th>{{ column }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const plotContainer = document.getElementById('history-chart');
+            if (plotContainer) {
+                const plotPayload = {{ history_plot | tojson }};
+                Plotly.newPlot(plotContainer, plotPayload.data, plotPayload.layout, {
+                    responsive: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['select2d', 'lasso2d']
+                });
+            }
+
+            const originalData = {{ original_data | tojson }};
+            const originalColumns = {{ original_columns | tojson }};
+            window.renderDataTable('original-table', originalColumns, originalData, {
+                order: [],
+                scrollY: '70vh',
+            });
+        });
+    </script>
+{% endblock %}

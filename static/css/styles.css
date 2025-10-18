@@ -1,0 +1,206 @@
+:root {
+    color-scheme: light;
+    --brand-primary: #4d7cfe;
+    --brand-dark: #172b4d;
+    --gradient-start: #4d7cfe;
+    --gradient-end: #7c4dfe;
+}
+
+body {
+    background: linear-gradient(180deg, #f5f7fb 0%, #ffffff 25%);
+    min-height: 100vh;
+}
+
+.gradient-card {
+    background: linear-gradient(135deg, rgba(77, 124, 254, 0.92), rgba(124, 77, 254, 0.86));
+    border-radius: 1.25rem;
+    color: #fff;
+}
+
+.icon-bubble {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    font-size: 1.25rem;
+}
+
+.upload-panel {
+    min-height: 100%;
+}
+
+.border-dashed {
+    border-style: dashed !important;
+}
+
+.step-counter {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+}
+
+.metric-card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.25rem;
+    box-shadow: 0 10px 25px rgba(23, 43, 77, 0.08);
+    border: 1px solid rgba(77, 124, 254, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(77, 124, 254, 0.12), transparent 60%);
+    pointer-events: none;
+}
+
+.metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(77, 124, 254, 0.08);
+    color: var(--brand-primary);
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(12, 37, 80, 0.65);
+}
+
+.metric-value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+}
+
+.metric-description {
+    font-size: 0.85rem;
+}
+
+.timeline {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    position: relative;
+}
+
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: 22px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(77, 124, 254, 0.15);
+}
+
+.timeline li {
+    position: relative;
+    padding-left: 58px;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 1rem;
+}
+
+.timeline-content h4 {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.chart-container {
+    min-height: 360px;
+}
+
+.insight-card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 12px 24px rgba(23, 43, 77, 0.08);
+    border: 1px solid rgba(23, 43, 77, 0.05);
+    height: 100%;
+}
+
+.icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 1.25rem;
+}
+
+.clipboard-toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: rgba(23, 43, 77, 0.95);
+    color: #fff;
+    padding: 0.75rem 1.25rem;
+    border-radius: 40px;
+    font-size: 0.9rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 1090;
+}
+
+.clipboard-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+table.dataTable tbody tr {
+    cursor: pointer;
+}
+
+table.dataTable tbody tr:hover {
+    background-color: rgba(77, 124, 254, 0.08) !important;
+}
+
+.toast-container .toast {
+    animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .chart-container {
+        min-height: 280px;
+    }
+
+    .metric-card {
+        padding: 1rem;
+    }
+}
