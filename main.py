@@ -129,6 +129,16 @@ def _format_value(value: Any) -> Any:
     return value
 
 
+def _format_index_value(value: Any) -> str:
+    if isinstance(value, (pd.Timestamp, datetime, date)):
+        return value.isoformat()
+    return str(value)
+
+
+def _infer_axis_title(index: pd.Index) -> str:
+    return "Time" if is_datetime64_any_dtype(index) else "Index"
+
+
 def _dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for record in dataframe.to_dict(orient="records"):
@@ -156,8 +166,20 @@ def _parse_timestamp_column(column: pd.Series) -> tuple[pd.Series, str]:
         register(pd.to_datetime(column, errors="coerce"), "pre-parsed datetimes")
 
     numeric = pd.to_numeric(column, errors="coerce")
-    if numeric.notna().sum():
+    numeric_non_na = numeric.dropna()
+    if not numeric_non_na.empty:
+        diffs = numeric_non_na.diff().dropna()
+        if not diffs.empty and np.allclose(diffs.values, diffs.iloc[0]) and abs(diffs.iloc[0] - 1) < 1e-9:
+            sequential = numeric_non_na.astype(int)
+            sequential.index = numeric_non_na.index
+            sequential.name = "timestamp"
+            register(sequential, "sequential numeric index")
+
+        epoch_thresholds = {"ns": 1e16, "us": 1e13, "ms": 1e10, "s": 1e7}
+        numeric_abs_max = numeric_non_na.abs().max()
         for unit in ("ns", "us", "ms", "s"):
+            if numeric_abs_max < epoch_thresholds[unit]:
+                continue
             parsed = pd.to_datetime(numeric, unit=unit, errors="coerce")
             register(parsed, f"numeric epoch ({unit})")
             if parsed.notna().all():
@@ -243,18 +265,41 @@ def _load_dataframe(uploaded_file) -> pd.DataFrame:
 
 
 def _prepare_series(dataframe: pd.DataFrame) -> tuple[pd.Series, dict[str, Any], dict[str, Any]]:
-    if dataframe.shape[1] < 2:
-        raise ValueError("Data must contain at least two columns for timestamp and values.")
+    if dataframe.shape[1] == 0:
+        raise ValueError("Uploaded data must contain at least one column.")
 
-    timestamps, timestamp_note = _parse_timestamp_column(dataframe.iloc[:, 0])
-    values = pd.to_numeric(dataframe.iloc[:, 1], errors="coerce")
+    timestamp_note: str
 
-    base = pd.DataFrame({"timestamp": timestamps, "value": values})
+    if dataframe.shape[1] == 1:
+        values = pd.to_numeric(dataframe.iloc[:, 0], errors="coerce")
+        timestamp_sequence = pd.Series(
+            np.arange(1, len(values) + 1, dtype=int),
+            name="timestamp",
+        )
+        timestamp_note = "Generated sequential index (1..N) because no timestamp column was provided."
+    else:
+        try:
+            timestamp_series, timestamp_note = _parse_timestamp_column(dataframe.iloc[:, 0])
+        except ValueError:
+            timestamp_series = pd.Series(
+                np.arange(1, len(dataframe) + 1, dtype=int),
+                name="timestamp",
+            )
+            timestamp_note = "Generated sequential index (1..N) because timestamp parsing failed."
+        values = pd.to_numeric(dataframe.iloc[:, 1], errors="coerce")
+        timestamp_sequence = timestamp_series
+
+    base = pd.DataFrame(
+        {
+            "timestamp": timestamp_sequence.reset_index(drop=True),
+            "value": values.reset_index(drop=True),
+        }
+    )
 
     missing_timestamp_count = int(base["timestamp"].isna().sum())
     base = base.dropna(subset=["timestamp"])
     if base.empty:
-        raise ValueError("No valid timestamps detected in the first column.")
+        raise ValueError("No valid timestamps detected and sequence generation failed.")
 
     base = base.sort_values("timestamp")
     base = base[~base["timestamp"].duplicated(keep="last")]
@@ -265,8 +310,12 @@ def _prepare_series(dataframe: pd.DataFrame) -> tuple[pd.Series, dict[str, Any],
     cleaned_series = series.copy()
     fill_steps: list[str] = []
     if missing_values_before:
-        cleaned_series = cleaned_series.interpolate(method="time")
-        fill_steps.append("time interpolation")
+        if is_datetime64_any_dtype(cleaned_series.index):
+            cleaned_series = cleaned_series.interpolate(method="time")
+            fill_steps.append("time interpolation")
+        else:
+            cleaned_series = cleaned_series.interpolate(method="linear")
+            fill_steps.append("linear interpolation")
         if cleaned_series.isna().sum():
             cleaned_series = cleaned_series.ffill().bfill()
             fill_steps.append("forward/back fill")
@@ -284,8 +333,8 @@ def _prepare_series(dataframe: pd.DataFrame) -> tuple[pd.Series, dict[str, Any],
         "minimum": float(cleaned_series.min()),
         "maximum": float(cleaned_series.max()),
         "value_range": float(cleaned_series.max() - cleaned_series.min()),
-        "start": cleaned_series.index.min().isoformat(),
-        "end": cleaned_series.index.max().isoformat(),
+        "start": _format_index_value(cleaned_series.index.min()),
+        "end": _format_index_value(cleaned_series.index.max()),
     }
 
     missing_info = {
@@ -462,7 +511,7 @@ def _build_history_plot(series: pd.Series) -> dict[str, Any]:
     )
     figure.update_layout(
         title="Time Series Overview",
-        xaxis_title="Time",
+        xaxis_title=_infer_axis_title(series.index),
         yaxis_title="Value",
         hovermode="x unified",
         template="plotly_white",
@@ -493,7 +542,7 @@ def _build_forecast_plot(series: pd.Series, forecast_values: pd.Series) -> dict[
     )
     figure.update_layout(
         title="Forecast Horizon",
-        xaxis_title="Time",
+        xaxis_title=_infer_axis_title(forecast_values.index),
         yaxis_title="Value",
         hovermode="x unified",
         template="plotly_white",
