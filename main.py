@@ -135,8 +135,65 @@ def _format_index_value(value: Any) -> str:
     return str(value)
 
 
+def _coerce_numeric_scalar(value: Any) -> Optional[float | int]:
+    if isinstance(value, (np.integer, int)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        if not np.isfinite(value):
+            return None
+        return int(value) if float(value).is_integer() else float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            numeric = float(stripped)
+        except ValueError:
+            return None
+        if not np.isfinite(numeric):
+            return None
+        return int(numeric) if numeric.is_integer() else numeric
+    return None
+
+
 def _infer_axis_title(index: pd.Index) -> str:
     return "Time" if is_datetime64_any_dtype(index) else "Index"
+
+
+def _estimate_seasonal_periods(index: pd.Index, steps: int) -> int:
+    if len(index) < 2:
+        return 2
+
+    freq = pd.infer_freq(index)
+    if not freq:
+        return max(2, min(len(index), max(steps // 2, 10)))
+
+    try:
+        offset = pd.tseries.frequencies.to_offset(freq)
+    except Exception:  # pylint: disable=broad-except
+        offset = None
+
+    if offset is None or offset.n is None:
+        return max(2, min(len(index), max(steps // 2, 10)))
+
+    day = pd.Timedelta(days=1)
+    week = pd.Timedelta(days=7)
+    month = pd.Timedelta(days=30)
+
+    if offset.delta < day:
+        periods = int(round(day / offset.delta))
+        return max(2, min(len(index), periods))
+    if offset.delta < week:
+        return max(2, min(len(index), 7))
+    if offset.delta < month:
+        return max(2, min(len(index), 52))
+    return max(2, min(len(index), 12))
+
+
+def _determine_training_window(series: pd.Series, seasonal_periods: int, steps: int) -> pd.Series:
+    target_points = max(50, seasonal_periods * 8, steps * 2)
+    keep = min(len(series), target_points)
+    return series.tail(keep)
 
 
 def _dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
@@ -187,8 +244,8 @@ def _parse_timestamp_column(column: pd.Series) -> tuple[pd.Series, str]:
 
     as_string = column.astype(str).str.strip().replace({"": np.nan})
     parse_strategies = [
-        ({"dayfirst": True, "infer_datetime_format": True, "cache": True}, "string parse (day-first)"),
-        ({"dayfirst": False, "infer_datetime_format": True, "cache": True}, "string parse (month-first)"),
+        ({"dayfirst": True, "cache": True}, "string parse (day-first)"),
+        ({"dayfirst": False, "cache": True}, "string parse (month-first)"),
         ({"dayfirst": True, "utc": True, "cache": True}, "string parse (day-first utc)"),
         ({"dayfirst": False, "utc": True, "cache": True}, "string parse (month-first utc)"),
     ]
@@ -352,10 +409,22 @@ def _serialize_series(series: pd.Series) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for index, value in series.items():
         if isinstance(index, (datetime, pd.Timestamp)):
-            timestamp = index.isoformat()
+            payload.append(
+                {
+                    "timestamp": index.isoformat(),
+                    "value": _format_value(value),
+                    "index_kind": "datetime",
+                }
+            )
         else:
-            timestamp = str(index)
-        payload.append({"timestamp": timestamp, "value": _format_value(value)})
+            numeric_index = _coerce_numeric_scalar(index)
+            payload.append(
+                {
+                    "timestamp": numeric_index if numeric_index is not None else _format_value(index),
+                    "value": _format_value(value),
+                    "index_kind": "numeric" if numeric_index is not None else "other",
+                }
+            )
     return payload
 
 
@@ -367,14 +436,27 @@ def _series_from_records(records: list[dict[str, Any]]) -> pd.Series:
     values: list[float] = []
     for record in records:
         timestamp_raw = record.get("timestamp")
+        index_kind = record.get("index_kind")
         value_raw = record.get("value")
         if value_raw is None:
             continue
 
-        try:
-            timestamp = pd.to_datetime(timestamp_raw)
-        except Exception:  # pylint: disable=broad-except
-            timestamp = timestamp_raw
+        numeric_value: Optional[float | int] = None
+        if index_kind == "numeric":
+            numeric_value = _coerce_numeric_scalar(timestamp_raw)
+        elif index_kind is None:
+            numeric_value = _coerce_numeric_scalar(timestamp_raw)
+            if numeric_value is not None:
+                index_kind = "numeric"
+
+        if numeric_value is not None:
+            timestamp = numeric_value
+        else:
+            try:
+                timestamp = pd.to_datetime(timestamp_raw)
+            except Exception:  # pylint: disable=broad-except
+                fallback_numeric = _coerce_numeric_scalar(timestamp_raw)
+                timestamp = fallback_numeric if fallback_numeric is not None else timestamp_raw
 
         timestamps.append(timestamp)
         values.append(float(value_raw))
@@ -455,9 +537,10 @@ def _fetch_dataset(dataset_id: int) -> dict[str, Any]:
 
 
 def _forecast_series(series: pd.Series, steps: int = DEFAULT_FORECAST_STEPS) -> tuple[pd.Series, pd.Series, dict[str, Any]]:
-    model_series = pd.Series(series.values)
+    seasonal_periods = _estimate_seasonal_periods(series.index, steps)
+    train_series = _determine_training_window(series, seasonal_periods, steps)
+    model_series = pd.Series(train_series.values)
 
-    seasonal_periods = min(DEFAULT_FORECAST_STEPS, len(series))
     seasonal_component: Optional[str] = "add" if seasonal_periods >= 2 else None
     seasonal_periods_value: Optional[int] = seasonal_periods if seasonal_periods >= 2 else None
 
@@ -471,15 +554,32 @@ def _forecast_series(series: pd.Series, steps: int = DEFAULT_FORECAST_STEPS) -> 
         )
         fit = model.fit(optimized=True)
     except Exception:  # pylint: disable=broad-except
-        model = ExponentialSmoothing(
-            model_series,
-            trend=None,
-            seasonal=None,
-            initialization_method="estimated",
-        )
-        fit = model.fit(optimized=True)
+        try:
+            model = ExponentialSmoothing(
+                model_series,
+                trend=None,
+                seasonal=None,
+                initialization_method="estimated",
+            )
+            fit = model.fit(optimized=True)
+        except Exception:  # pylint: disable=broad-except
+            last_value = float(train_series.iloc[-1]) if len(train_series) else 0.0
+            fitted_values = pd.Series([last_value] * len(train_series), index=train_series.index)
+            forecast_values = pd.Series([last_value] * steps)
+            diagnostics = {"converged": False, "general": [], "details": [], "messages": ["Holt-Winters fallback to naive repeat"]}
 
-    fitted_values = pd.Series(fit.fittedvalues.values, index=series.index)
+            inferred_freq: Optional[str] = pd.infer_freq(series.index)
+            if inferred_freq:
+                offset = pd.tseries.frequencies.to_offset(inferred_freq)
+                start = series.index[-1] + offset
+                forecast_index = pd.date_range(start=start, periods=steps, freq=inferred_freq)
+            else:
+                forecast_index = pd.RangeIndex(start=len(series), stop=len(series) + steps, name="step")
+
+            forecast_series = pd.Series(forecast_values.values, index=forecast_index, name="forecast")
+            return fitted_values, forecast_series, diagnostics
+
+    fitted_values = pd.Series(fit.fittedvalues.values, index=train_series.index)
     forecast_values = fit.forecast(steps=steps)
 
     inferred_freq: Optional[str] = pd.infer_freq(series.index)
@@ -718,6 +818,7 @@ def visualize(dataset_id: int) -> str:
         summary_cards=summary_cards,
         missing_info=dataset["missing"],
         history_plot=history_plot,
+        forecast_steps=DEFAULT_FORECAST_STEPS,
     )
 
 
@@ -730,7 +831,10 @@ def forecast(dataset_id: int) -> str:
         return redirect(url_for("upload"))
 
     series = _series_from_records(dataset["cleaned_series"])
-    _, forecast_values, fit_diagnostics = _forecast_series(series)
+    requested_steps = request.args.get("steps", type=int) or DEFAULT_FORECAST_STEPS
+    forecast_steps = max(1, min(requested_steps, 1000))
+
+    _, forecast_values, fit_diagnostics = _forecast_series(series, steps=forecast_steps)
     forecast_plot = _build_forecast_plot(series, forecast_values)
 
     forecast_rows = (
@@ -747,7 +851,7 @@ def forecast(dataset_id: int) -> str:
         dataset=dataset,
         forecast_rows=formatted_rows,
         forecast_plot=forecast_plot,
-        forecast_steps=DEFAULT_FORECAST_STEPS,
+        forecast_steps=forecast_steps,
         fit_diagnostics=fit_diagnostics,
     )
 

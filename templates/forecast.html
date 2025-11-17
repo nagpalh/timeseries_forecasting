@@ -17,9 +17,14 @@
             <h1 class="h3 fw-bold mb-1">Forecast your future trajectory</h1>
             <p class="text-muted mb-0">{{ dataset.filename }} &middot; {{ forecast_steps }} period Holt-Winters projection</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <form class="d-flex align-items-center gap-2" method="get" action="{{ url_for('forecast', dataset_id=dataset.id) }}">
+                <label class="small text-muted" for="steps">Steps</label>
+                <input id="steps" name="steps" class="form-control form-control-sm" type="number" min="1" max="1000" value="{{ forecast_steps }}" style="width:110px;">
+                <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-rotate me-2"></i>Update</button>
+            </form>
             <a class="btn btn-outline-secondary" href="{{ url_for('visualize', dataset_id=dataset.id) }}"><i class="fa-solid fa-arrow-left me-2"></i>Back to explore</a>
-            <a class="btn btn-primary" href="{{ url_for('upload') }}"><i class="fa-solid fa-cloud-arrow-up me-2"></i>Upload another dataset</a>
+            <a class="btn btn-outline-primary" href="{{ url_for('upload') }}"><i class="fa-solid fa-cloud-arrow-up me-2"></i>Upload another</a>
         </div>
     </div>
 

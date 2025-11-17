@@ -16,9 +16,9 @@
             <h1 class="h3 fw-bold mb-1">Explore & diagnose your dataset</h1>
             <p class="text-muted mb-0">{{ dataset.filename }} &middot; Uploaded at {{ dataset.uploaded_at }}</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-outline-primary" href="{{ url_for('upload') }}"><i class="fa-solid fa-repeat me-2"></i>Upload another</a>
-            <a class="btn btn-primary" href="{{ url_for('forecast', dataset_id=dataset.id) }}"><i class="fa-solid fa-forward me-2"></i>Proceed to forecasting</a>
+            <a class="btn btn-primary" href="{{ url_for('forecast', dataset_id=dataset.id, steps=forecast_steps if forecast_steps is defined else 96) }}"><i class="fa-solid fa-forward me-2"></i>Proceed to forecasting</a>
         </div>
     </div>
 
