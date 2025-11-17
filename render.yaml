@@ -9,6 +9,6 @@ services:
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: "3.11.9"
       - key: MAX_CONTENT_LENGTH
         value: "16777216"
