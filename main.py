@@ -164,6 +164,9 @@ def _estimate_seasonal_periods(index: pd.Index, steps: int) -> int:
     if len(index) < 2:
         return 2
 
+    if not is_datetime64_any_dtype(index):
+        return max(2, min(len(index), max(steps // 2, 10)))
+
     freq = pd.infer_freq(index)
     if not freq:
         return max(2, min(len(index), max(steps // 2, 10)))
